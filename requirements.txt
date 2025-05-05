@@ -1,0 +1,16 @@
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+
+# Core dependencies
+deepface==0.0.83
+opencv-python-headless==4.9.0.80
+
+# TensorFlow (solo CPU)
+tensorflow==2.15.0
+
+# Otros requeridos por DeepFace
+numpy>=1.19.5
+Pillow>=7.0.0
+scipy>=1.4.1
+gdown==5.0.1
+requests
