@@ -5,6 +5,7 @@ from deepface import DeepFace
 import uvicorn
 import shutil
 import os
+import httpx
 
 app = FastAPI()
 
@@ -30,10 +31,18 @@ async def detect_face(file: UploadFile = File(...)):
         result = DeepFace.detectFace(temp_file_path, detector_backend='opencv')
 
         os.remove(temp_file_path)
+
+        # 🔔 Enviamos mensaje al espectro
+        async with httpx.AsyncClient() as client:
+            await client.post("https://espectroapi.scanmee.io/ws-message", json={
+                "type": "notification",
+                "message": "👁️ Se detectó un rostro frente a la cámara. Activando espectro IA."
+            })
+
         return JSONResponse(content={"status": "success", "message": "Rostro detectado"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
+        
 # Nuevo endpoint para análisis facial completo
 @app.post("/analyze")
 async def analyze_face(file: UploadFile = File(...), actions: str = Form("emotion")):
