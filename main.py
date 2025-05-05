@@ -8,8 +8,14 @@ import os
 
 app = FastAPI()
 
-# Montamos el frontend desde la carpeta "static"
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Montamos el frontend desde la carpeta "static" en /static
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Servimos el index.html manualmente en /
+@app.get("/", response_class=HTMLResponse)
+async def serve_home():
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 # Endpoint original de detección con archivo
 @app.post("/detect")
