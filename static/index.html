@@ -3,64 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <title>Detector de Rostros</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      background: #111;
-      color: #fff;
-      text-align: center;
-      padding: 20px;
-    }
-    video, canvas {
-      border: 2px solid #ccc;
-      margin: 10px;
-      max-width: 100%;
-    }
-  </style>
 </head>
-<body>
+<body style="text-align: center; background: #111; color: white;">
   <h1>Detector de Rostros</h1>
-  <video id="video" autoplay playsinline width="320" height="240"></video>
-  <br />
-  <button id="capture">Capturar Foto</button>
-  <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
-  <pre id="output"></pre>
+
+  <video id="video" width="320" height="240" autoplay></video>
+  <canvas id="canvas" width="320" height="240" style="display: none;"></canvas>
+
+  <form id="form" enctype="multipart/form-data" method="POST">
+    <input type="hidden" name="file" id="image-data" />
+    <button type="submit">Capturar Foto</button>
+  </form>
+
+  <pre id="result" style="color: white; margin-top: 20px;"></pre>
 
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const output = document.getElementById('output');
-    const captureButton = document.getElementById('capture');
+    const form = document.getElementById('form');
+    const result = document.getElementById('result');
 
-    // Iniciar cámara
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then((stream) => {
-        video.srcObject = stream;
-      })
-      .catch((err) => {
-        output.textContent = '❌ Error al acceder a la cámara: ' + err;
-      });
+    // Acceder a la cámara
+    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+      video.srcObject = stream;
+    });
 
-    captureButton.addEventListener('click', async () => {
-      // Capturar imagen
+    form.onsubmit = async (e) => {
+      e.preventDefault();
       const context = canvas.getContext('2d');
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Convertir a blob
       canvas.toBlob(async (blob) => {
         const formData = new FormData();
         formData.append('file', blob, 'captura.jpg');
 
-        // Enviar al servidor
         const res = await fetch('/detect', {
           method: 'POST',
-          body: formData
+          body: formData,
         });
-
         const json = await res.json();
-        output.textContent = JSON.stringify(json, null, 2);
+        result.textContent = JSON.stringify(json, null, 2);
       }, 'image/jpeg');
-    });
+    };
   </script>
 </body>
 </html>
