@@ -28,7 +28,7 @@ async def detect_face(file: UploadFile = File(...)):
         with open(temp_file_path, "wb") as f:
             f.write(contents)
 
-        result = DeepFace.detectFace(temp_file_path, detector_backend='opencv')
+        _ = DeepFace.analyze(img_path=temp_file_path, actions=[], enforce_detection=True)
 
         os.remove(temp_file_path)
 
