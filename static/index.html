@@ -1,49 +1,47 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Detector de Rostros</title>
+    <meta charset="UTF-8">
+    <title>Detector de Rostros</title>
+    <style>
+        body { background: #111; color: white; text-align: center; font-family: Arial; }
+        video, canvas { border: 2px solid white; margin-top: 10px; }
+        button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
+    </style>
 </head>
-<body style="text-align: center; background: #111; color: white;">
-  <h1>Detector de Rostros</h1>
+<body>
+    <h1>Detector de Rostros</h1>
+    <video id="video" width="320" height="240" autoplay></video>
+    <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+    <br>
+    <button onclick="capturar()">Capturar Foto</button>
+    <pre id="resultado"></pre>
 
-  <video id="video" width="320" height="240" autoplay></video>
-  <canvas id="canvas" width="320" height="240" style="display: none;"></canvas>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const resultado = document.getElementById('resultado');
 
-  <form id="form" enctype="multipart/form-data" method="POST">
-    <input type="hidden" name="file" id="image-data" />
-    <button type="submit">Capturar Foto</button>
-  </form>
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => video.srcObject = stream)
+            .catch(err => console.error("Error al acceder a la cámara:", err));
 
-  <pre id="result" style="color: white; margin-top: 20px;"></pre>
+        function capturar() {
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => {
+                const formData = new FormData();
+                formData.append('file', blob, 'captura.jpg');
 
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const form = document.getElementById('form');
-    const result = document.getElementById('result');
-
-    // Acceder a la cámara
-    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
-      video.srcObject = stream;
-    });
-
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const context = canvas.getContext('2d');
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(async (blob) => {
-        const formData = new FormData();
-        formData.append('file', blob, 'captura.jpg');
-
-        const res = await fetch('/detect', {
-          method: 'POST',
-          body: formData,
-        });
-        const json = await res.json();
-        result.textContent = JSON.stringify(json, null, 2);
-      }, 'image/jpeg');
-    };
-  </script>
+                fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => resultado.textContent = JSON.stringify(data, null, 2))
+                .catch(err => resultado.textContent = "Error: " + err);
+            }, 'image/jpeg');
+        }
+    </script>
 </body>
 </html>
