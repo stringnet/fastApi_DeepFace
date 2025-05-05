@@ -1,58 +1,53 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from deepface import DeepFace
+import uvicorn
 import shutil
 import os
 
 app = FastAPI()
 
-# Habilitar CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Puedes restringir a dominios específicos
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Montamos el frontend desde la carpeta "static"
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
+# Endpoint original de detección con archivo
 @app.post("/detect")
 async def detect_face(file: UploadFile = File(...)):
     try:
-        file_location = f"temp_{file.filename}"
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        contents = await file.read()
+        temp_file_path = f"temp_{file.filename}"
 
-        result = DeepFace.verify(
-            img1_path=file_location,
-            img2_path=file_location,  # Se usa la misma imagen para detectar si hay rostro
-            enforce_detection=True
-        )
+        with open(temp_file_path, "wb") as f:
+            f.write(contents)
 
-        os.remove(file_location)
+        result = DeepFace.detectFace(temp_file_path, detector_backend='opencv')
 
-        if result.get("verified") is True:
-            return JSONResponse(content={"detected": True})
-        else:
-            return JSONResponse(content={"detected": False})
+        os.remove(temp_file_path)
+        return JSONResponse(content={"status": "success", "message": "Rostro detectado"})
     except Exception as e:
-        return JSONResponse(content={"detected": False, "error": str(e)}, status_code=500)
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
+# Nuevo endpoint para análisis facial completo
 @app.post("/analyze")
-async def analyze_face(file: UploadFile = File(...)):
+async def analyze_face(file: UploadFile = File(...), actions: str = Form("emotion")):
     try:
-        file_location = f"temp_{file.filename}"
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        contents = await file.read()
+        temp_file_path = f"temp_{file.filename}"
 
-        analysis = DeepFace.analyze(
-            img_path=file_location,
-            actions=["emotion", "age", "gender", "race"],
-            enforce_detection=False
-        )
+        with open(temp_file_path, "wb") as f:
+            f.write(contents)
 
-        os.remove(file_location)
-        return JSONResponse(content=analysis[0])  # Retorna solo el primer resultado
+        result = DeepFace.analyze(img_path=temp_file_path, actions=actions.split(","))
 
+        os.remove(temp_file_path)
+        return JSONResponse(content={"status": "success", "data": result})
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+# Solo si corres localmente
+def run_local():
+    uvicorn.run("main:app", host="0.0.0.0", port=3001, reload=True)
+
+if __name__ == "__main__":
+    run_local()
