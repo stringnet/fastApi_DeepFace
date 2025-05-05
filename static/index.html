@@ -2,56 +2,59 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Detección Facial</title>
+  <title>Detector de Rostros</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 2rem; }
-    video, canvas { border: 1px solid #ccc; margin: 1rem 0; }
-    #response { margin-top: 1rem; font-weight: bold; }
+    body { background-color: #111; color: #fff; text-align: center; font-family: Arial; }
+    video, canvas { margin-top: 20px; border: 2px solid #fff; }
+    button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
+    pre { margin-top: 20px; background: #222; padding: 10px; color: #0f0; text-align: left; display: inline-block; }
   </style>
 </head>
 <body>
-
-  <h1>Detector de Rostros con DeepFace</h1>
-  <video id="video" width="400" autoplay></video>
-  <br>
-  <button id="capture">Capturar Foto</button>
-  <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
-
-  <div id="response"></div>
+  <h1>Detector de Rostros</h1>
+  <video id="video" width="320" height="240" autoplay></video>
+  <canvas id="canvas" width="320" height="240" style="display: none;"></canvas><br>
+  <button onclick="capturarFoto()">Capturar Foto</button>
+  <pre id="respuesta"></pre>
 
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const responseDiv = document.getElementById('response');
-    const captureBtn = document.getElementById('capture');
+    const respuesta = document.getElementById('respuesta');
 
-    // Activar cámara
+    // Pedir acceso a la cámara
     navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => video.srcObject = stream)
-      .catch(err => {
-        console.error("No se pudo acceder a la cámara:", err);
-        alert("No se pudo acceder a la cámara.");
+      .then((stream) => {
+        video.srcObject = stream;
+      })
+      .catch((err) => {
+        console.error("Error al acceder a la cámara: ", err);
       });
 
-    // Capturar imagen y enviar al backend
-    captureBtn.addEventListener('click', async () => {
+    async function capturarFoto() {
+      // Dibujar frame actual en canvas
       const context = canvas.getContext('2d');
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      canvas.toBlob(async (blob) => {
+      // Convertir a blob (imagen)
+      canvas.toBlob(async function(blob) {
         const formData = new FormData();
-        formData.append("file", blob, "captura.jpg");
+        formData.append('file', blob, 'foto.jpg');
+        formData.append('actions', 'emotion');
 
-        const res = await fetch("/detect", {
-          method: "POST",
-          body: formData
-        });
+        try {
+          const res = await fetch('/analyze', {
+            method: 'POST',
+            body: formData
+          });
 
-        const data = await res.json();
-        responseDiv.innerText = data.message || data.detail || "Respuesta recibida.";
-      }, "image/jpeg");
-    });
+          const data = await res.json();
+          respuesta.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+          respuesta.textContent = "Error al enviar la imagen: " + error;
+        }
+      }, 'image/jpeg');
+    }
   </script>
-
 </body>
 </html>
