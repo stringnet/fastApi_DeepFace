@@ -2,63 +2,65 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>FaceDetector - ScanMee</title>
+  <title>Detector de Rostros</title>
   <style>
-    video, canvas {
-      display: block;
-      margin: 10px auto;
-      border: 2px solid #333;
-    }
-    #status {
-      text-align: center;
+    body {
       font-family: sans-serif;
-      font-size: 18px;
-      margin-top: 10px;
+      background: #111;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    video, canvas {
+      border: 2px solid #ccc;
+      margin: 10px;
+      max-width: 100%;
     }
   </style>
 </head>
 <body>
-  <video id="video" width="320" height="240" autoplay muted></video>
+  <h1>Detector de Rostros</h1>
+  <video id="video" autoplay playsinline width="320" height="240"></video>
+  <br />
+  <button id="capture">Capturar Foto</button>
   <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
-  <div id="status">⏳ Iniciando...</div>
+  <pre id="output"></pre>
 
   <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const status = document.getElementById("status");
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const output = document.getElementById('output');
+    const captureButton = document.getElementById('capture');
 
-    // Activa la cámara
+    // Iniciar cámara
     navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
+      .then((stream) => {
         video.srcObject = stream;
-        status.textContent = "🎥 Cámara activa. Analizando...";
-        setInterval(captureAndSend, 3000); // cada 3 segundos
       })
-      .catch(err => {
-        status.textContent = "❌ Error al acceder a la cámara: " + err;
+      .catch((err) => {
+        output.textContent = '❌ Error al acceder a la cámara: ' + err;
       });
 
-    // Captura frame y lo envía al backend
-    async function captureAndSend() {
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(async blob => {
+    captureButton.addEventListener('click', async () => {
+      // Capturar imagen
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convertir a blob
+      canvas.toBlob(async (blob) => {
         const formData = new FormData();
-        formData.append("file", blob, "frame.jpg");
+        formData.append('file', blob, 'captura.jpg');
 
-        try {
-          const response = await fetch("https://facedetector.scanmee.io/detect", {
-            method: "POST",
-            body: formData
-          });
+        // Enviar al servidor
+        const res = await fetch('/detect', {
+          method: 'POST',
+          body: formData
+        });
 
-          const result = await response.json();
-          status.textContent = result.detected ? "✅ Rostro detectado" : "🔍 Buscando rostro...";
-        } catch (err) {
-          status.textContent = "⚠️ Error en conexión o procesamiento: " + err;
-        }
-      }, "image/jpeg");
-    }
+        const json = await res.json();
+        output.textContent = JSON.stringify(json, null, 2);
+      }, 'image/jpeg');
+    });
   </script>
 </body>
 </html>
