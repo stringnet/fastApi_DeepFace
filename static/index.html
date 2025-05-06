@@ -1,60 +1,159 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Detector de Rostros</title>
-  <style>
-    body { background-color: #111; color: #fff; text-align: center; font-family: Arial; }
-    video, canvas { margin-top: 20px; border: 2px solid #fff; }
-    button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
-    pre { margin-top: 20px; background: #222; padding: 10px; color: #0f0; text-align: left; display: inline-block; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Detector de Rostros Automático</title>
+    <style>
+        body { background-color: #111; color: #fff; text-align: center; font-family: sans-serif; }
+        video, canvas { margin-top: 10px; border: 2px solid #fff; }
+        button { margin: 15px 5px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        /* Estilo para el botón activo/inactivo */
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        pre { margin-top: 15px; background: #222; padding: 10px; color: #0f0; text-align: left; display: inline-block; min-height: 50px; vertical-align: top;}
+        #status { margin-top: 10px; font-style: italic; color: #aaa; }
+    </style>
 </head>
 <body>
-  <h1>Detector de Rostros</h1>
-  <video id="video" width="320" height="240" autoplay></video>
-  <canvas id="canvas" width="320" height="240" style="display: none;"></canvas><br>
-  <button onclick="capturarFoto()">Capturar Foto</button>
-  <pre id="respuesta"></pre>
+    <h1>Detector de Rostros Automático</h1>
+    <p>La detección iniciará el análisis y enviará la emoción detectada al Espectro.</p>
+    <video id="video" width="320" height="240" autoplay playsinline muted></video> <canvas id="canvas" width="320" height="240" style="display: none;"></canvas><br>
 
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const respuesta = document.getElementById('respuesta');
+    <button id="startButton" onclick="startAutomaticDetection()">Iniciar Detección Auto</button>
+    <button id="stopButton" onclick="stopAutomaticDetection()" disabled>Detener Detección Auto</button>
 
-    // Pedir acceso a la cámara
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then((stream) => {
-        video.srcObject = stream;
-      })
-      .catch((err) => {
-        console.error("Error al acceder a la cámara: ", err);
-      });
+    <div id="status">Estado: Detenido</div>
+    <pre id="respuesta">Resultados del último análisis aparecerán aquí...</pre>
 
-    async function capturarFoto() {
-      // Dibujar frame actual en canvas
-      const context = canvas.getContext('2d');
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const respuesta = document.getElementById('respuesta');
+        const statusDiv = document.getElementById('status');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
 
-      // Convertir a blob (imagen)
-      canvas.toBlob(async function(blob) {
-        const formData = new FormData();
-        formData.append('file', blob, 'foto.jpg');
-        formData.append('actions', 'emotion');
+        let analysisInterval = null; // Variable para guardar el ID del intervalo
+        let isAnalysisRunning = false; // Flag para evitar envíos simultáneos
+        const CAPTURE_INTERVAL_MS = 3000; // Intervalo en milisegundos (ej: 3 segundos)
 
-        try {
-          const res = await fetch('/analyze', {
-            method: 'POST',
-            body: formData
-          });
+        // Pedir acceso a la cámara
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+                console.log("Acceso a cámara OK");
+                video.srcObject = stream;
+                // Habilitar botón de inicio una vez que la cámara está lista (o casi)
+                // Un pequeño retraso para asegurar que el video tenga dimensiones
+                video.onloadedmetadata = () => {
+                     console.log("Video metadata loaded");
+                     startButton.disabled = false;
+                }
+            })
+            .catch((err) => {
+                console.error("Error al acceder a la cámara: ", err);
+                statusDiv.textContent = "Error: No se pudo acceder a la cámara.";
+                alert("Error al acceder a la cámara: " + err.message);
+            });
 
-          const data = await res.json();
-          respuesta.textContent = JSON.stringify(data, null, 2);
-        } catch (error) {
-          respuesta.textContent = "Error al enviar la imagen: " + error;
+        // Función que captura un frame y lo envía al backend para analizar
+        async function analyzeCurrentFrame() {
+            // Si ya hay un análisis en curso, esperar al siguiente intervalo
+            if (isAnalysisRunning) {
+                console.log("Análisis anterior aún en curso, saltando frame.");
+                return;
+            }
+            // Asegurarse que el video esté listo
+            if (!video || video.readyState < 3) {
+                console.log("Video no listo aún...");
+                return;
+            }
+
+            console.log("Capturando frame...");
+            isAnalysisRunning = true; // Marcar como ocupado
+            statusDiv.textContent = "Estado: Capturando y analizando...";
+
+            // Dibujar frame actual en canvas
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convertir a blob y enviar
+            canvas.toBlob(async function(blob) {
+                if (!blob) {
+                    console.error("Error al crear Blob desde el canvas");
+                    isAnalysisRunning = false; // Liberar flag
+                    statusDiv.textContent = "Estado: Error en captura.";
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', blob, 'frame.jpg');
+                formData.append('actions', 'emotion'); // Asegurarnos de pedir la emoción
+
+                try {
+                    const res = await fetch('/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    // Mostrar error si la respuesta HTTP no es OK
+                    if (!res.ok) {
+                         const errorText = await res.text();
+                         throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
+                    }
+
+                    const data = await res.json();
+                    // Mostrar resultado en el <pre>
+                    respuesta.textContent = JSON.stringify(data, null, 2);
+                    console.log("Análisis completado:", data);
+                    // El backend ya se encargó de enviar la emoción (si la hubo) a espectroapi
+                     statusDiv.textContent = "Estado: Esperando siguiente captura...";
+
+
+                } catch (error) {
+                    console.error("Error al enviar/procesar frame:", error);
+                    respuesta.textContent = "Error en análisis: " + error.message;
+                     statusDiv.textContent = "Estado: Error en análisis.";
+                } finally {
+                     isAnalysisRunning = false; // Liberar flag para el próximo intervalo
+                }
+            }, 'image/jpeg', 0.8); // Calidad JPEG
         }
-      }, 'image/jpeg');
-    }
-  </script>
+
+        // Función para iniciar el intervalo
+        function startAutomaticDetection() {
+            if (analysisInterval) return; // Ya está corriendo
+
+            console.log(`Iniciando detección automática cada ${CAPTURE_INTERVAL_MS} ms`);
+            statusDiv.textContent = `Estado: Detección automática activa (cada ${CAPTURE_INTERVAL_MS / 1000}s)`;
+            // Llamar una vez inmediatamente para una respuesta rápida
+            analyzeCurrentFrame();
+            // Iniciar el intervalo
+            analysisInterval = setInterval(analyzeCurrentFrame, CAPTURE_INTERVAL_MS);
+
+            // Actualizar botones
+            startButton.disabled = true;
+            stopButton.disabled = false;
+        }
+
+        // Función para detener el intervalo
+        function stopAutomaticDetection() {
+            if (!analysisInterval) return; // Ya está detenido
+
+            clearInterval(analysisInterval);
+            analysisInterval = null;
+            isAnalysisRunning = false; // Resetear flag por si acaso
+            console.log("Detección automática detenida.");
+            statusDiv.textContent = "Estado: Detenido";
+
+             // Actualizar botones
+             startButton.disabled = false;
+             stopButton.disabled = true;
+        }
+
+         // Deshabilitar botón de inicio hasta que el video cargue
+         startButton.disabled = true;
+
+    </script>
 </body>
 </html>
